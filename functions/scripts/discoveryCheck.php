@@ -17,18 +17,17 @@ $email = true;							//set mail with status diff to admins
 $emailText = false;						//format to send mail via text or html
 //$wait = 500;							//time to wait for response in ms
 $count = 1;								//number of pings to send
-$timeout = 1;							//timeut in seconds
+$timeout = 1;							//timeout in seconds
 
 // response
 $stateDiff = array();					//Array with differences, can be used to email to admins
 
 // test to see if threading is available
-if( !Thread::available() ) 	{ $threads = false; }		//pcntl php extension required
-else						{ $threads = true; }
-
+if(!Thread::available()) 	{ $threads = false; }	//pcntl php extension required
+else											{ $threads = true; }
 
 //get all IP to be discovered > in decimal format
-$addresses = getSubnetsToDiscover ();
+$subnets = getSubnetsToDiscover ();
 
 //get settings
 $settings = getAllSettings();
@@ -44,92 +43,124 @@ elseif(!$threads) {
 }
 //threaded
 else {
-	//get size of addresses to ping
-	$size = sizeof($addresses);
-	
-	$z = 0;			//addresses array index
+	// Used for mail reports
+	$archive = array();
 
-	//run per MAX_THREADS
-    for ($m=0; $m<=$size; $m += $settings['scanMaxThreads']) {
-        // create threads 
-        $threads = array();
-        
-        //fork processes
-        for ($i = 0; $i <= $settings['scanMaxThreads'] && $i <= $size; $i++) {
-        	//only if index exists!
-        	if(isset($addresses[$z])) {      	
-				//start new thread
-	            $threads[$z] = new Thread( 'pingHost' );
-	            $threads[$z]->start( Transform2long($addresses[$z]['ip_addr']), $count, $timeout, true );
+	foreach($subnets as $s) {
+		$ips = array();
+		$ipCheck = array();
+		$addresses = array();
+
+ 		// set start and end IP address
+ 		$calc = calculateSubnetDetailsNew ( $s['subnet'], $s['mask'], 0, 0, 0, 0 );
+ 		// loop and get all IP addresses for ping
+		for($m=1; $m<=$calc['maxhosts']; $m++) {
+			// save to array for return
+			$ips[]  = $s['subnet']+$m;
+			// save to array for existing check
+			$ipCheck[] = $s['subnet']+$m;
+		}
+
+		$addresses = getIpAddressesBySubnetId ($s['id']);
+
+		// remove already existing
+		foreach($addresses as $a) {
+			$key = array_search($a['ip_addr'], $ipCheck);
+			if($key!==false) {
+				unset($ips[$key]);
 			}
-	        $z++;				//next index
-        }
+		}
 
-        // wait for all the threads to finish 
-        while( !empty( $threads ) ) {
-            foreach( $threads as $index => $thread ) {
-                if( ! $thread->isAlive() ) {
-                	//get exit code
-                	$exitCode = $thread->getExitCode();
-                	
-					//unset dead hosts
-					if($exitCode != 0) {
-						$dead[]=$addresses[$index];
-						unset($addresses[$index]);
-					}
-  
-                    //remove thread
-                    unset( $threads[$index]);
-                }
-            }
-            usleep(500);
-        }
-	}
-}
+		// DISCOVERY
 
+		//get size of addresses to ping
+		$size = sizeof($ips);
 
-// first add to IP table
-foreach($addresses as $k=>$ip) {
-	// try to resolve
-	$ip['dns_name'] = ResolveDnsName ($ip['ip_addr']);
-	if($ip['dns_name']['class']=="resolved")	{ 
-		$ip['dns_name'] = $ip['dns_name']['name'];
-		$addresses[$k]['dns_name'] = $ip['dns_name']; 
-	}
-	else { 
-		$ip['dns_name'] = ""; 
-		$addresses[$k]['dns_name'] = _("unresolved");
-	}
-	
-	// insert
-	if(!insert_discovered_ip($ip))	{ print "Cannot add discovered IP ".transform2long($ip['ip_addr'])."\n"; }
-}
+		$z = 0;	//addresses array index
+		//run per MAX_THREADS
+	  for ($m=0; $m<=$size; $m += $settings['scanMaxThreads']) {
+	  	// create threads
+	    $threads = array();
 
-// all done, mail discovered?
-if(sizeof($addresses)>0 && $email)
-{
+      //fork processes
+    	for ($i = 0; $i <= $settings['scanMaxThreads'] && $i <= $size; $i++) {
+      	//only if index exists!
+      	if(isset($ips[$z])) {
+          $threads[$z] = new Thread( 'pingHost' );
+          $threads[$z]->start( Transform2long($ips[$z]), $count, $timeout, true );
+				}
+        $z++;	//next index
+      }
+
+      // wait for all the threads to finish
+      while( !empty( $threads ) ) {
+      	foreach($threads as $index => $thread) {
+        	if(!$thread->isAlive()) {
+          	//get exit code
+            $exitCode = $thread->getExitCode();
+						//unset dead hosts
+						if($exitCode != 0) {
+							$dead[]=$ips[$index];
+							unset($ips[$index]);
+						}
+            //remove thread
+            unset($threads[$index]);
+          }
+        } // end foreach
+        usleep(500);
+      } // end while
+		} // end for
+
+		// INSERTING
+
+		if(!empty($ips)) {
+			foreach($ips as $k=>$ip) {
+				$submission = array();
+				$submission['subnetId'] = $s['id'];
+				$submission['ip_addr'] = $ip;
+				// try to resolve
+				$submission['dns_name'] = ResolveDnsName ($ip);
+				if($submission['dns_name']['class']=="resolved") {
+					$submission['dns_name'] = $submission['dns_name']['name'];
+				}
+				else {
+					$submission['dns_name'] = "";
+				}
+				// insert
+				if(!insert_discovered_ip($submission))	{ print "Cannot add discovered IP ".transform2long($submission['ip_addr'])."\n"; }
+
+				$archive[$s['id']][$submission['dns_name']] = $submission['ip_addr'];
+			}
+		}
+	} // end foreach
+} // end else
+
+// REPORTING
+
+if(sizeof($ips)>0 && $email) {
+	print "\nhit";
 	//send text array, cron will do that by default if you don't redirect output > /dev/null 2>&1
 	if($emailText) {
-		print_r($stateDiff);		
+		print_r($stateDiff);
 	}
 	//html
 	else {
-	
-		$mail['from']		= "$settings[siteTitle] <ipam@$settings[siteDomain]>";
-		$mail['headers']	= 'From: ' . $mail['from'] . "\r\n";
-		$mail['headers']   .= "Content-type: text/html; charset=utf8" . "\r\n";
-		$mail['headers']   .= 'X-Mailer: PHP/' . phpversion() ."\r\n";
-		
+
+		$mail['from']		   = "$settings[siteTitle] <ipam@$settings[siteDomain]>";
+		$mail['headers']	 = 'From: ' . $mail['from'] . "\r\n";
+		$mail['headers']  .= "Content-type: text/html; charset=utf8" . "\r\n";
+		$mail['headers']  .= 'X-Mailer: PHP/' . phpversion() ."\r\n";
+
 		//subject
 		$mail['subject'] 	= "phpIPAM new addresses detected ".date("Y-m-d H:i:s");
-	
+
 		//header
 		$html[] = "<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01 Transitional//EN' 'http://www.w3.org/TR/html4/loose.dtd'>";
 		$html[] = "<html>";
 		$html[] = "<head></head>";
 		$html[] = "<body>";
 		//title
-		$html[] = "<h3>phpIPAM found ".sizeof($addresses)." new hosts</h3>";
+		$html[] = "<h3>phpIPAM found ".sizeof($ips)." new hosts</h3>";
 		//table
 		$html[] = "<table style='margin-left:10px;margin-top:5px;width:auto;padding:0px;border-collapse:collapse;border:1px solid gray;'>";
 		$html[] = "<tr>";
@@ -140,29 +171,31 @@ if(sizeof($addresses)>0 && $email)
 
 		$html[] = "</tr>";
 		//Changes
-		foreach($addresses as $change) {
+		foreach($archive as $index => $change) {
 			//set subnet
-			$subnet = getSubnetDetails($change['subnetId']);
+			$subnet = getSubnetDetails($index);
 			$subnetPrint = Transform2long($subnet['subnet'])."/".$subnet['mask']." - ".$subnet['description'];
 			//set section
 			$section = getSectionDetailsById($subnet['sectionId']);
 			$sectionPrint = $section['name']." (".$section['description'].")";
-			
-			$html[] = "<tr>";
-			$html[] = "	<td style='padding:3px 8px;border:1px solid silver;'>".Transform2long($change['ip_addr'])."</td>";
-			$html[] = "	<td style='padding:3px 8px;border:1px solid silver;'>$change[dns_name]</td>";
-			$html[] = "	<td style='padding:3px 8px;border:1px solid silver;'><a href='$settings[siteURL]".create_link("subnets",$section['id'],$subnet['id'])."'>$subnetPrint</a></td>";
-			$html[] = "	<td style='padding:3px 8px;border:1px solid silver;'><a href='$settings[siteURL]".create_link("subnets",$section['id'])."'>$sectionPrint</a></td>";
 
-			$html[] = "</tr>";
+			foreach($change as $dns => $ip) {
+				$html[] = "<tr>";
+				$html[] = "	<td style='padding:3px 8px;border:1px solid silver;'>".Transform2long($ip)."</td>";
+				$html[] = "	<td style='padding:3px 8px;border:1px solid silver;'>$dns</td>";
+				$html[] = "	<td style='padding:3px 8px;border:1px solid silver;'><a href='$settings[siteURL]".create_link("subnets",$section['id'],$subnet['id'])."'>$subnetPrint</a></td>";
+				$html[] = "	<td style='padding:3px 8px;border:1px solid silver;'><a href='$settings[siteURL]".create_link("subnets",$section['id'])."'>$sectionPrint</a></td>";//
+
+				$html[] = "</tr>";
+			}
 		}
 		$html[] = "</table>";
 		//footer
-		
+
 		//end
 		$html[] = "</body>";
 		$html[] = "</html>";
-		
+
 		//save to array
 		$mail['content'] = implode("\n", $html);
 
