@@ -110,9 +110,9 @@ if($mailsettings['mtype']=="smtp") {
 	$pmail->isSMTP();
 	//tls, sll?
 	if($mailsettings['msecure']=='ssl')	{
-	$mail->SMTPSecure = 'ssl';	
+	$pmail->SMTPSecure = 'ssl';	
 	} elseif($mailsettings['msecure']=='tls')
-	$mail->SMTPSecure = 'tls';	
+	$pmail->SMTPSecure = 'tls';	
 	//server
 	$pmail->Host = $mailsettings['mserver'];
 	$pmail->Port = $mailsettings['mport'];
