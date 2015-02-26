@@ -1278,6 +1278,45 @@ function getSubnetsToDiscover ()
     return $subnets;
 }
 
+/**
+ * Get all hosts that haven't been seen in X number of seconds
+ */
+function getExpiredOfflineHosts ($seconds) 
+{
+  global $database;
+  /* set query */
+  $query =  "select * from ipaddresses where lastSeen < NOW() -INTERVAL $seconds SECOND;";
+
+  /* execute */
+  try { $hosts = $database->getArray( $query ); }
+  catch (Exception $e) {
+      $error =  $e->getMessage();
+      print ("<div class='alert alert-danger'>"._('Error').": $error</div>");
+      return false;
+  }
+
+  return $hosts;
+}
+
+/**
+ * Remove all hosts that haven't been seen in X number of seconds
+ */
+function removeExpiredOfflineHosts ($seconds) 
+{
+  global $database;
+  /* set query */
+  $query =  "delete from ipaddresses where lastSeen < NOW() -INTERVAL $seconds SECOND;";
+
+  /* execute */
+  try { $database->executeQuery( $query ); }
+  catch (Exception $e) {
+      $error =  $e->getMessage();
+      print ("<div class='alert alert-danger'>"._('Error').": $error</div>");
+      return false;
+  }
+
+}
+
 
 /**
  *	Insert newly discovered IP address form cron script
