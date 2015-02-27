@@ -3462,6 +3462,29 @@ function updateLastSeen($ip_id)
     return true;
 }
 
+/**
+ * Update host DNS
+ */
+function updateDNSName($ip)
+{
+    global $db;
+    $database = new database($db['host'], $db['user'], $db['pass'], $db['name'], NULL, false);
+
+    /* get all vlans, descriptions and subnets */
+    $query = 'update `ipaddresses` set `dns_name` = "'.$ip['dns_name'].'" where `id` = "'.$ip['id'].'";';
+
+  //update
+    try { $res = $database->executeQuery( $query ); }
+    catch (Exception $e) {
+        $error =  $e->getMessage();
+        print ("<div class='alert alert-danger'>"._('Error').": $error</div>");
+        return false;
+    }
+
+    //default
+    return true;
+}
+
 
 /**
  *	Get all IP addresses for scan
@@ -3470,7 +3493,7 @@ function getAllIPsforScan($cli = false)
 {
     global $database;
     //set query
-    $query = 'select `i`.`id`,`i`.`description`,`subnetId`,`ip_addr`,`lastSeen`,`lastSeen` as `oldStamp` from `ipaddresses` as `i`, `subnets` as `s` where `i`.`subnetId`=`s`.`id` and `s`.`pingSubnet` = 1 and `i`.`excludePing` != 1 order by `lastSeen` desc;';
+    $query = 'select `i`.`id`,`i`.`description`,`subnetId`,`ip_addr`,`dns_name`,`lastSeen`,`lastSeen` as `oldStamp` from `ipaddresses` as `i`, `subnets` as `s` where `i`.`subnetId`=`s`.`id` and `s`.`pingSubnet` = 1 and `i`.`excludePing` != 1 order by `lastSeen` desc;';
 
 	//get IP addresses
     try { $res = $database->getArray( $query ); }
