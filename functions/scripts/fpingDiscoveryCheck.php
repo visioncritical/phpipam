@@ -6,6 +6,15 @@ function fpingHosts ($ipRange, $count, $fpingPath) {
   return $output;
 }
 
+// function provided by Sanaa Rayane
+function cidrToRange($cidr) {
+  $cidr = explode('/', $cidr);
+  $range = long2ip((ip2long($cidr[0])) & ((-1 << (32 - (int)$cidr[1]))));
+  $range.= " ";
+  $range.= long2ip((ip2long($cidr[0])) + pow(2, (32 - (int)$cidr[1])) - 1);
+  return $range;
+} 
+
 // include required scripts
 require_once( dirname(__FILE__) . '/../functions.php' );
 require_once( dirname(__FILE__) . '/fpingThread.php');
@@ -13,15 +22,15 @@ require_once( dirname(__FILE__) . '/../functions-mail.php');
 require_once( dirname(__FILE__) . '/../scan/config-scan.php');
 
 // config
-$email = true;						      //set mail with status diff to admins
-$emailText = false;				      //format to send mail via text or html
-$count = 1;								      //number of pings to send
+$email = true;                  //set mail with status diff to admins
+$emailText = false;             //format to send mail via text or html
+$count = 1;                     //number of pings to send
 $numberOfThreads = 3;           //number of threads to run
 $fpingPath = '/usr/sbin/fping'; //path to fping
 
 // test to see if threading is available
-if(!Thread::available()) 	{ $threads = false; }	//pcntl php extension required
-else											{ $threads = true; }
+if(!Thread::available())  { $threads = false; } //pcntl php extension required
+else        { $threads = true; }
 
 //get all subnets that are to be included
 $subnets = getSubnetsToDiscover ();
@@ -46,7 +55,7 @@ else {
 
   //DISCOVERY
 
-  $z = 0;	//subnet array index
+  $z = 0; //subnet array index
   for ($m=0; $m<=$size; $m += $numberOfThreads) {
     // create threads
     $threads = array();
@@ -56,9 +65,10 @@ else {
       //only if index exists!
       if(isset($subnets[$z])) {
         $threads[$z] = new Thread( 'fpingHosts' );
-        $threads[$z]->start( Transform2long($subnets[$z]['subnet'])."/".$subnets[$z]['mask'], $count, $fpingPath, true );
+        //$threads[$z]->start( Transform2long($subnets[$z]['subnet'])."/".$subnets[$z]['mask'], $count, $fpingPath, true );
+        $threads[$z]->start( cidrToRange( Transform2long($subnets[$z]['subnet'])."/".$subnets[$z]['mask'] ), $count, $fpingPath, true );
       }
-      $z++;	//next index
+      $z++; //next index
     }
 
     //code graciously given by Ricardo Sanchez (along with the modifications to fpingThread.php)
@@ -126,7 +136,7 @@ else {
           }
 
           // insert
-          if(!insert_discovered_ip($submission))	{ print "Cannot add discovered IP ".$submission['ip_addr']."\n"; }
+          if(!insert_discovered_ip($submission))  { print "Cannot add discovered IP ".$submission['ip_addr']."\n"; }
 
           if(!$submission['dns_name'] == "") {
             $archive[$k][$submission['dns_name']] = $submission['ip_addr'];
@@ -151,13 +161,13 @@ else {
     //html
     else {
 
-      $mail['from']		   = "$settings[siteTitle] <ipam@$settings[siteDomain]>";
-      $mail['headers']	 = 'From: ' . $mail['from'] . "\r\n";
+      $mail['from']      = "$settings[siteTitle] <ipam@$settings[siteDomain]>";
+      $mail['headers']   = 'From: ' . $mail['from'] . "\r\n";
       $mail['headers']  .= "Content-type: text/html; charset=utf8" . "\r\n";
       $mail['headers']  .= 'X-Mailer: PHP/' . phpversion() ."\r\n";
 
       //subject
-      $mail['subject'] 	= "phpIPAM new addresses detected ".date("Y-m-d H:i:s");
+      $mail['subject']  = "phpIPAM new addresses detected ".date("Y-m-d H:i:s");
 
       //header
       $html[] = "<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01 Transitional//EN' 'http://www.w3.org/TR/html4/loose.dtd'>";
@@ -169,10 +179,10 @@ else {
       //table
       $html[] = "<table style='margin-left:10px;margin-top:5px;width:auto;padding:0px;border-collapse:collapse;border:1px solid gray;'>";
       $html[] = "<tr>";
-      $html[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>IP</th>";
-      $html[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Hostname</th>";
-      $html[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Subnet</th>";
-      $html[] = "	<th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Section</th>";
+      $html[] = " <th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>IP</th>";
+      $html[] = " <th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Hostname</th>";
+      $html[] = " <th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Subnet</th>";
+      $html[] = " <th style='padding:3px 8px;border:1px solid silver;border-bottom:2px solid gray;'>Section</th>";
 
       $html[] = "</tr>";
       //Changes
@@ -190,10 +200,10 @@ else {
             $dns='';
           }
           $html[] = "<tr>";
-          $html[] = "	<td style='padding:3px 8px;border:1px solid silver;'>".Transform2long($ip)."</td>";
-          $html[] = "	<td style='padding:3px 8px;border:1px solid silver;'>$dns</td>";
-          $html[] = "	<td style='padding:3px 8px;border:1px solid silver;'><a href='$settings[siteURL]".create_link("subnets",$section['id'],$subnet['id'])."'>$subnetPrint</a></td>";
-          $html[] = "	<td style='padding:3px 8px;border:1px solid silver;'><a href='$settings[siteURL]".create_link("subnets",$section['id'])."'>$sectionPrint</a></td>";//
+          $html[] = " <td style='padding:3px 8px;border:1px solid silver;'>".Transform2long($ip)."</td>";
+          $html[] = " <td style='padding:3px 8px;border:1px solid silver;'>$dns</td>";
+          $html[] = " <td style='padding:3px 8px;border:1px solid silver;'><a href='$settings[siteURL]".create_link("subnets",$section['id'],$subnet['id'])."'>$subnetPrint</a></td>";
+          $html[] = " <td style='padding:3px 8px;border:1px solid silver;'><a href='$settings[siteURL]".create_link("subnets",$section['id'])."'>$sectionPrint</a></td>";//
 
           $html[] = "</tr>";
         }
