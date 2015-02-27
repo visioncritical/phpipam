@@ -13,7 +13,7 @@
   $hosts = getExpiredOfflineHosts ($seconds);
   removeExpiredOfflineHosts ($seconds);
 
-  if($hosts>0 && $email) {
+  if(sizeof($hosts)>0 && $email) {
     //send text array, cron will do that by default if you don't redirect output > /dev/null 2>&1
     //this will be unformated (i.e. no Transform2long on the ip_addr field)
     if($emailText) {
