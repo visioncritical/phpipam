@@ -10,8 +10,14 @@
   $email = true; // Whether or not to email at all
   $emailText = false; // Email HTML or not
 
-  $hosts = getExpiredOfflineHosts ($seconds);
-  removeExpiredOfflineHosts ($seconds);
+  // You can specify which type of hosts you want to expire by passing the appropriate # found in the state db column 
+  // (default is active, must be passed through an array, and empty array means all)
+  // 0 = offline
+  // 1 = active
+  // 2 = reserved
+  // 3 = offline
+  $hosts = getExpiredOfflineHosts ($seconds, array(1));
+  removeExpiredOfflineHosts ($seconds, array(1));
 
   if(sizeof($hosts)>0 && $email) {
     //send text array, cron will do that by default if you don't redirect output > /dev/null 2>&1

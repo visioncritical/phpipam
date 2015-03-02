@@ -1281,11 +1281,22 @@ function getSubnetsToDiscover ()
 /**
  * Get all hosts that haven't been seen in X number of seconds
  */
-function getExpiredOfflineHosts ($seconds) 
+function getExpiredOfflineHosts ($seconds, $state = array(1)) 
 {
   global $database;
-  /* set query */
-  $query =  "select * from ipaddresses where lastSeen < NOW() -INTERVAL $seconds SECOND;";
+
+  if (sizeof($state)>0) {
+    $conditions = array();
+
+    foreach ($state as $condition) {
+      $conditions[] = "state = $condition";
+    }
+      /* set query */
+    $query = "select * from ipaddresses where lastSeen < NOW() -INTERVAL $seconds SECOND AND ".implode(' OR ', $conditions).";";
+  }
+  else {
+    $query = "select * from ipaddresses where lastSeen < NOW() -INTERVAL $seconds SECOND;";
+  }
 
   /* execute */
   try { $hosts = $database->getArray( $query ); }
@@ -1301,11 +1312,22 @@ function getExpiredOfflineHosts ($seconds)
 /**
  * Remove all hosts that haven't been seen in X number of seconds
  */
-function removeExpiredOfflineHosts ($seconds) 
+function removeExpiredOfflineHosts ($seconds, $state = array(1)) 
 {
   global $database;
-  /* set query */
-  $query =  "delete from ipaddresses where lastSeen < NOW() -INTERVAL $seconds SECOND;";
+
+  if (sizeof($state)>0) {
+    $conditions = array();
+
+    foreach ($state as $condition) {
+      $conditions[] = "state = $condition";
+    }
+      /* set query */
+    $query = "delete from ipaddresses where lastSeen < NOW() -INTERVAL $seconds SECOND AND ".implode(' OR ', $conditions).";";
+  }
+  else {
+    $query = "delete from ipaddresses where lastSeen < NOW() -INTERVAL $seconds SECOND;";
+  }
 
   /* execute */
   try { $database->executeQuery( $query ); }
